@@ -2,7 +2,7 @@
 Sigue el orden del tabulador de la pantalla. Nunca pulsa «Aceptar»: eso lo haces tú después de revisar cada causa.
 
 Uso:  doble clic (usa partes-para-tecleo.json de la misma carpeta) o por línea de comandos:
-      PartesTeclea.exe partes-para-tecleo.json            (paso a paso: espera ENTER en cada campo)
+      PartesTeclea.exe partes-para-tecleo.json            (paso a paso: espera F9 en cada campo)
       PartesTeclea.exe partes-para-tecleo.json --rapido   (escribe la causa completa y se detiene al terminar)
       PartesTeclea.exe partes-para-tecleo.json --simular  (solo muestra qué escribiría, sin tocar nada)
 """
@@ -59,6 +59,20 @@ def plan(p):
     ]
 
 
+def esperar_tecla(vk=0x78, abortar=0x1B):
+    """Espera F9 (siguiente) sin quitarle el foco al sistema; ESC aborta. Solo Windows."""
+    import ctypes
+    u = ctypes.windll.user32
+    while u.GetAsyncKeyState(vk) & 0x8000:      # suelta primero la tecla anterior
+        time.sleep(0.02)
+    while True:
+        if u.GetAsyncKeyState(vk) & 0x8000:
+            return True
+        if u.GetAsyncKeyState(abortar) & 0x8000:
+            raise KeyboardInterrupt
+        time.sleep(0.03)
+
+
 def resumen(i, p):
     return "[%d] boleta %s · N° parte %s · %s · %s" % (i, p.get("boleta"), p.get("n_parte"),
                                                          p.get("rut") or "SR", p.get("nombre") or p.get("placa"))
@@ -108,7 +122,8 @@ def main(argv):
         base = ventanas()
         for etq, t in plan(p):
             if not rapido:
-                input("  -> %s : «%s»   (ENTER para escribir) " % (etq, t if t else ""))
+                print("  -> %s : «%s»   (F9 = escribir y seguir · ESC = parar)" % (etq, t if t else ""))
+                esperar_tecla()
             if t is None:
                 send_keys("{ENTER}")
             elif t:
@@ -119,8 +134,8 @@ def main(argv):
             nuevas = {h: n for h, n in ventanas().items() if h not in base}
             if nuevas:
                 print("  !! Apareció una ventana:", list(nuevas.values()),
-                      "\n     Respóndela tú. Luego pulsa ENTER para seguir con el siguiente campo.")
-                input()
+                      "\n     Respóndela tú. Luego pulsa F9 para seguir con el siguiente campo.")
+                esperar_tecla()
                 base = ventanas()
         print("Listo: revisa la causa y pulsa «Aceptar» tú mismo.")
     return 0
