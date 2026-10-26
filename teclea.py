@@ -1,7 +1,8 @@
 """PartesTeclea: escribe en la pantalla «Procesos 2DO. JUZGADO» los datos de los partes revisados en ParteScan.
 Sigue el orden del tabulador de la pantalla. Nunca pulsa «Aceptar»: eso lo haces tú después de revisar cada causa.
 
-Uso:  PartesTeclea.exe partes-para-tecleo.json            (paso a paso: espera ENTER en cada campo)
+Uso:  doble clic (usa partes-para-tecleo.json de la misma carpeta) o por línea de comandos:
+      PartesTeclea.exe partes-para-tecleo.json            (paso a paso: espera ENTER en cada campo)
       PartesTeclea.exe partes-para-tecleo.json --rapido   (escribe la causa completa y se detiene al terminar)
       PartesTeclea.exe partes-para-tecleo.json --simular  (solo muestra qué escribiría, sin tocar nada)
 """
@@ -63,10 +64,25 @@ def resumen(i, p):
                                                          p.get("rut") or "SR", p.get("nombre") or p.get("placa"))
 
 
+def buscar_json(argv):
+    """Con doble clic no hay argumentos: se usa el primer .json de la carpeta o el que se escriba/arrastre."""
+    import glob
+    import os
+    if len(argv) > 1 and not argv[1].startswith("--"):
+        return argv[1]
+    base = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, "frozen", False) else __file__))
+    hallados = sorted(glob.glob(os.path.join(base, "partes-para-tecleo*.json")) + glob.glob("partes-para-tecleo*.json"))
+    if hallados:
+        print("Usando", hallados[-1]); return hallados[-1]
+    ruta = input("No encontré partes-para-tecleo.json en esta carpeta.\nArrastra aquí el archivo y pulsa ENTER: ")
+    return ruta.strip().strip('"')
+
+
 def main(argv):
-    if len(argv) < 2:
+    ruta = buscar_json(argv)
+    if not ruta:
         print(__doc__); return 1
-    datos = json.load(open(argv[1], encoding="utf-8"))["partes"]
+    datos = json.load(open(ruta, encoding="utf-8"))["partes"]
     simular, rapido = "--simular" in argv, "--rapido" in argv
     if simular:
         for i, p in enumerate(datos, 1):
@@ -107,4 +123,16 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    for flujo in (sys.stdout, sys.stderr):
+        try:
+            flujo.reconfigure(errors="replace")     # la consola de Windows no siempre muestra tildes ni «…»
+        except Exception:
+            pass
+    try:
+        codigo = main(sys.argv)
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        codigo = 1
+    input("\nPulsa ENTER para cerrar esta ventana… ")
+    sys.exit(codigo)
