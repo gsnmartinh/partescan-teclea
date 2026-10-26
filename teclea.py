@@ -99,8 +99,12 @@ def main(argv):
     for i, p in enumerate(datos, 1):
         print("\n" + resumen(i, p))
         input("Abre una causa NUEVA (pantalla vacía, cursor en el Rol) y pulsa ENTER aquí… ")
-        win = Desktop(backend="win32").window(title_re=TITULO)
-        win.set_focus()
+        # la causa es una ventana interna del sistema (MDI): no se busca por título. Tienes unos segundos para
+        # hacer clic en el campo Rol del sistema; el programa escribe en lo que tenga el foco.
+        for n in range(5, 0, -1):
+            print("  Haz clic en el campo Rol del sistema… empiezo en %d" % n, end="\r")
+            time.sleep(1)
+        print(" " * 60)
         base = ventanas()
         for etq, t in plan(p):
             if not rapido:
