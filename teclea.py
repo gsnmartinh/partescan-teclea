@@ -1,0 +1,110 @@
+"""PartesTeclea: escribe en la pantalla «Procesos 2DO. JUZGADO» los datos de los partes revisados en ParteScan.
+Sigue el orden del tabulador de la pantalla. Nunca pulsa «Aceptar»: eso lo haces tú después de revisar cada causa.
+
+Uso:  PartesTeclea.exe partes-para-tecleo.json            (paso a paso: espera ENTER en cada campo)
+      PartesTeclea.exe partes-para-tecleo.json --rapido   (escribe la causa completa y se detiene al terminar)
+      PartesTeclea.exe partes-para-tecleo.json --simular  (solo muestra qué escribiría, sin tocar nada)
+"""
+import json
+import re
+import sys
+import time
+import unicodedata
+
+TITULO = r"Procesos 2DO\. JUZGADO"
+PAUSA = 0.25          # segundos entre campos en modo rápido
+
+
+def sin_tildes(v):
+    v = unicodedata.normalize("NFD", str(v or ""))
+    return "".join(c for c in v if unicodedata.category(c) != "Mn")
+
+
+def escapar(t):
+    """send_keys interpreta + ^ % ~ ( ) { } como teclas especiales: se escriben entre llaves."""
+    return "".join("{%s}" % c if c in "+^%~(){}[]" else c for c in sin_tildes(t))
+
+
+def hora4(h):
+    m = re.fullmatch(r"\s*(\d{1,2}):(\d{2})", h or "")
+    return "%02d%s" % (int(m.group(1)), m.group(2)) if m else ""
+
+
+def plan(p):
+    """Lista de (etiqueta, texto) en el orden del tabulador (los números son los pasos de la pantalla)."""
+    inf = " ".join(p.get("infracciones") or [])
+    return [
+        ("1 Rol (se pulsa ENTER: el sistema pone el número)", None),
+        ("2 Oficina emisora", p.get("oficina", "")),
+        ("3 Fecha ingreso", p.get("fecha_ingreso", "")),
+        ("4a Nº Parte", p.get("n_parte", "")),
+        ("4b Fecha parte", p.get("fecha_parte", "")),
+        ("5 Bol/N.Parte", p.get("boleta", "")),
+        ("6 Fecha de la boleta", p.get("fecha_parte", "")),
+        ("7 Descripción de la causa", p.get("descripcion", "")),
+        ("8 Actuario (hazlo tú: depende del rol)", ""),
+        ("9 Citación", p.get("fecha_citacion", "")),
+        ("10 Lugar", p.get("lugar", "")),
+        ("11 Hora de la infracción", hora4(p.get("hora", ""))),
+        ("12 RUT (SR si no tiene)", p.get("rut", "") or "SR"),
+        ("13 Nombres", p.get("nombre", "")),
+        ("14 Dirección", p.get("direccion", "")),
+        ("15 Comuna", p.get("comuna", "")),
+        ("16 Placa", p.get("placa", "")),
+        ("17 Tipo de vehículo", p.get("tipo_vehiculo", "")),
+        ("18 Marca", p.get("marca", "")),
+        ("19 Fecha de la infracción", p.get("fecha_parte", "")),
+        ("20 Infracción (códigos: %s)" % (inf or "sin código"), inf.split()[0] if inf else ""),
+    ]
+
+
+def resumen(i, p):
+    return "[%d] boleta %s · N° parte %s · %s · %s" % (i, p.get("boleta"), p.get("n_parte"),
+                                                         p.get("rut") or "SR", p.get("nombre") or p.get("placa"))
+
+
+def main(argv):
+    if len(argv) < 2:
+        print(__doc__); return 1
+    datos = json.load(open(argv[1], encoding="utf-8"))["partes"]
+    simular, rapido = "--simular" in argv, "--rapido" in argv
+    if simular:
+        for i, p in enumerate(datos, 1):
+            print(resumen(i, p))
+            for etq, t in plan(p):
+                print("    %-48s %s" % (etq, "" if t is None else t))
+        return 0
+    from pywinauto import Desktop
+    from pywinauto.keyboard import send_keys
+
+    def ventanas():
+        return {w.handle: w.window_text() for w in Desktop(backend="win32").windows() if w.is_visible()}
+
+    for i, p in enumerate(datos, 1):
+        print("\n" + resumen(i, p))
+        input("Abre una causa NUEVA (pantalla vacía, cursor en el Rol) y pulsa ENTER aquí… ")
+        win = Desktop(backend="win32").window(title_re=TITULO)
+        win.set_focus()
+        base = ventanas()
+        for etq, t in plan(p):
+            if not rapido:
+                input("  -> %s : «%s»   (ENTER para escribir) " % (etq, t if t else ""))
+            if t is None:
+                send_keys("{ENTER}")
+            elif t:
+                send_keys(escapar(t), with_spaces=True, pause=0.02)
+            if t is not None:
+                send_keys("{TAB}")
+            time.sleep(PAUSA if rapido else 0.1)
+            nuevas = {h: n for h, n in ventanas().items() if h not in base}
+            if nuevas:
+                print("  !! Apareció una ventana:", list(nuevas.values()),
+                      "\n     Respóndela tú. Luego pulsa ENTER para seguir con el siguiente campo.")
+                input()
+                base = ventanas()
+        print("Listo: revisa la causa y pulsa «Aceptar» tú mismo.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

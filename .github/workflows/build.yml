@@ -1,0 +1,23 @@
+name: Compilar PartesTeclea para Windows
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+concurrency:
+  group: compilar
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: pyinstaller --noconfirm --clean --onefile --name PartesTeclea teclea.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PartesTeclea-Windows
+          path: dist/PartesTeclea.exe
+          retention-days: 14
